@@ -1,0 +1,67 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+from app.core.database import engine, Base
+from app.core.redis import init_redis, close_redis
+from app.core.logging import logger
+from app.routers import auth, transactions, reminders, reports, webhook, billing, admin
+from app.utils.security_middleware import SecurityHeadersMiddleware, IPRateLimitMiddleware
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Starting up application...")
+    
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    
+    await init_redis()
+    logger.info("Application started successfully")
+    
+    yield
+    
+    logger.info("Shutting down application...")
+    await close_redis()
+    await engine.dispose()
+    logger.info("Application shut down successfully")
+
+
+app = FastAPI(
+    title="Financial Assistant API",
+    description="SaaS Financial Assistant via WhatsApp",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:3001"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(IPRateLimitMiddleware, requests_per_minute=100)
+
+app.include_router(auth.router)
+app.include_router(transactions.router)
+app.include_router(reminders.router)
+app.include_router(reports.router)
+app.include_router(webhook.router)
+app.include_router(billing.router)
+app.include_router(admin.router)
+
+
+@app.get("/")
+async def root():
+    return {
+        "message": "Financial Assistant API",
+        "version": "1.0.0",
+        "status": "running"
+    }
+
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
