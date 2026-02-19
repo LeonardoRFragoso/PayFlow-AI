@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field, field_validator
 from datetime import datetime, date
 from decimal import Decimal
 from typing import Optional
-from app.models.transaction import TransactionType
+from app.models.transaction import TransactionType, PaymentMethod
 
 
 class TransactionCreate(BaseModel):
@@ -10,6 +10,8 @@ class TransactionCreate(BaseModel):
     amount: Decimal = Field(..., gt=0, decimal_places=2)
     category: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = Field(None, max_length=500)
+    payment_method: PaymentMethod = PaymentMethod.CONTA_CORRENTE
+    affects_balance: bool = True
     date: date
     
     @field_validator('amount')
@@ -25,6 +27,8 @@ class TransactionUpdate(BaseModel):
     amount: Optional[Decimal] = Field(None, gt=0, decimal_places=2)
     category: Optional[str] = Field(None, min_length=1, max_length=100)
     description: Optional[str] = Field(None, max_length=500)
+    payment_method: Optional[PaymentMethod] = None
+    affects_balance: Optional[bool] = None
     date: Optional[date] = None
 
 
@@ -35,6 +39,8 @@ class TransactionResponse(BaseModel):
     amount: Decimal
     category: str
     description: Optional[str]
+    payment_method: PaymentMethod
+    affects_balance: bool
     date: date
     created_at: datetime
     

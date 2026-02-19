@@ -4,13 +4,18 @@ from contextlib import asynccontextmanager
 from app.core.database import engine, Base
 from app.core.redis import init_redis, close_redis
 from app.core.logging import logger
-from app.routers import auth, transactions, reminders, reports, webhook, billing, admin
+from app.routers import auth, transactions, reminders, reports, webhook, billing, admin, test, health
 from app.utils.security_middleware import SecurityHeadersMiddleware, IPRateLimitMiddleware
+from app.core.config import settings
+from app.core.security_validator import validate_production_config
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting up application...")
+    
+    # Validate critical security configuration
+    validate_production_config()
     
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -33,16 +38,24 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+cors_origins = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+]
+if hasattr(settings, 'FRONTEND_URL') and settings.FRONTEND_URL not in cors_origins:
+    cors_origins.append(settings.FRONTEND_URL)
+if hasattr(settings, 'BACKEND_URL') and settings.BACKEND_URL not in cors_origins:
+    cors_origins.append(settings.BACKEND_URL)
+
+app.add_middleware(IPRateLimitMiddleware, requests_per_minute=100)
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-app.add_middleware(SecurityHeadersMiddleware)
-app.add_middleware(IPRateLimitMiddleware, requests_per_minute=100)
 
 app.include_router(auth.router)
 app.include_router(transactions.router)
@@ -51,6 +64,8 @@ app.include_router(reports.router)
 app.include_router(webhook.router)
 app.include_router(billing.router)
 app.include_router(admin.router)
+app.include_router(test.router)
+app.include_router(health.router)
 
 
 @app.get("/")

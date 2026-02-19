@@ -3,7 +3,7 @@ from sqlalchemy import select, func, extract, and_
 from typing import List, Optional
 from datetime import date, datetime
 from decimal import Decimal
-from app.models.transaction import Transaction, TransactionType
+from app.models.transaction import Transaction, TransactionType, PaymentMethod
 from app.schemas.transaction import TransactionCreate, TransactionUpdate
 
 
@@ -18,6 +18,8 @@ class TransactionRepository:
             amount=transaction_data.amount,
             category=transaction_data.category,
             description=transaction_data.description,
+            payment_method=transaction_data.payment_method,
+            affects_balance=transaction_data.affects_balance,
             date=transaction_data.date
         )
         self.db.add(transaction)
@@ -62,6 +64,19 @@ class TransactionRepository:
         )
         return list(result.scalars().all())
     
+    async def count_by_month(self, user_id: int, year: int, month: int) -> int:
+        result = await self.db.execute(
+            select(func.count(Transaction.id))
+            .where(
+                and_(
+                    Transaction.user_id == user_id,
+                    extract('year', Transaction.date) == year,
+                    extract('month', Transaction.date) == month
+                )
+            )
+        )
+        return result.scalar_one()
+
     async def get_by_month(self, user_id: int, year: int, month: int) -> List[Transaction]:
         result = await self.db.execute(
             select(Transaction)
@@ -123,6 +138,47 @@ class TransactionRepository:
             for row in result.all()
         ]
     
+    async def get_balance_affecting_total(
+        self,
+        user_id: int,
+        transaction_type: TransactionType,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None
+    ) -> Decimal:
+        query = select(func.coalesce(func.sum(Transaction.amount), 0)).where(
+            and_(
+                Transaction.user_id == user_id,
+                Transaction.type == transaction_type,
+                Transaction.affects_balance == True
+            )
+        )
+        if start_date:
+            query = query.where(Transaction.date >= start_date)
+        if end_date:
+            query = query.where(Transaction.date <= end_date)
+        result = await self.db.execute(query)
+        return result.scalar_one()
+
+    async def get_credit_card_total(
+        self,
+        user_id: int,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None
+    ) -> Decimal:
+        query = select(func.coalesce(func.sum(Transaction.amount), 0)).where(
+            and_(
+                Transaction.user_id == user_id,
+                Transaction.type == TransactionType.EXPENSE,
+                Transaction.payment_method == PaymentMethod.CARTAO_CREDITO
+            )
+        )
+        if start_date:
+            query = query.where(Transaction.date >= start_date)
+        if end_date:
+            query = query.where(Transaction.date <= end_date)
+        result = await self.db.execute(query)
+        return result.scalar_one()
+
     async def update(
         self, 
         transaction_id: int, 

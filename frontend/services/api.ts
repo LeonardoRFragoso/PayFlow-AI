@@ -4,6 +4,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 const api = axios.create({
   baseURL: API_URL,
+  timeout: 30000, // 30 segundos
   headers: {
     'Content-Type': 'application/json',
   },
@@ -22,7 +23,9 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
-      window.location.href = '/login';
+      if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
@@ -65,6 +68,26 @@ export const reportsAPI = {
   getCurrentMonth: () => api.get('/reports/current-month'),
   getPeriod: (startDate: string, endDate: string) =>
     api.get(`/reports/period?start_date=${startDate}&end_date=${endDate}`),
+};
+
+export const billingAPI = {
+  getPlans: () => api.get('/billing/plans'),
+  createCheckout: (planId: number) =>
+    api.post('/billing/checkout', { plan_id: planId }),
+  getPayments: () => api.get('/billing/payments'),
+  getUsage: () => api.get('/billing/usage'),
+  cancelSubscription: () => api.post('/billing/cancel-subscription'),
+};
+
+export const adminAPI = {
+  getMetrics: () => api.get('/admin/metrics'),
+  getFunnel: () => api.get('/admin/funnel'),
+  getRetentionCohort: () => api.get('/admin/retention-cohort'),
+  getConversion: () => api.get('/admin/conversion'),
+  getRetention: (days = 30) => api.get(`/admin/retention?days=${days}`),
+  getChurn: () => api.get('/admin/churn'),
+  getLTV: () => api.get('/admin/ltv'),
+  getDashboard: (cacEstimate = 50) => api.get(`/admin/dashboard?cac_estimate=${cacEstimate}`),
 };
 
 export default api;

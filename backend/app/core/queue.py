@@ -2,6 +2,7 @@ from redis import Redis
 from rq import Queue
 from app.core.config import settings
 from app.core.logging import logger
+from app.workers.whatsapp_worker import process_whatsapp_message
 
 redis_conn = Redis.from_url(settings.REDIS_URL, decode_responses=False)
 
@@ -13,7 +14,7 @@ notifications_queue = Queue('notifications', connection=redis_conn)
 def enqueue_whatsapp_message(user_id: int, phone_number: str, message: str, message_sid: str):
     try:
         job = whatsapp_queue.enqueue(
-            'app.workers.whatsapp_worker.process_whatsapp_message',
+            process_whatsapp_message,
             user_id=user_id,
             phone_number=phone_number,
             message=message,

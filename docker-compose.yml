@@ -75,6 +75,18 @@ services:
         condition: service_healthy
     command: python worker.py
 
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: financial_assistant_ngrok
+    restart: unless-stopped
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    command: http backend:8000 --log stdout
+    ports:
+      - "4040:4040"
+    depends_on:
+      - backend
+
 volumes:
   postgres_data:
   redis_data:

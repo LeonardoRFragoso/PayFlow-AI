@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from app.models.reminder import Reminder
 from app.schemas.reminder import ReminderCreate, ReminderUpdate
 
@@ -47,7 +47,7 @@ class ReminderRepository:
         return list(result.scalars().all())
     
     async def get_upcoming(self, user_id: int, days: int = 7) -> List[Reminder]:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         result = await self.db.execute(
             select(Reminder)
             .where(

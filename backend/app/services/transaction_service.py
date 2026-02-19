@@ -20,7 +20,7 @@ class TransactionService:
         user_id: int, 
         transaction_data: TransactionCreate
     ) -> Transaction:
-        user_transactions = await self.transaction_repo.get_by_user(user_id, limit=1)
+        user_transactions = await self.transaction_repo.get_all_by_user(user_id, limit=1)
         is_first_transaction = len(user_transactions) == 0
         
         transaction = await self.transaction_repo.create(user_id, transaction_data)
@@ -102,6 +102,35 @@ class TransactionService:
         expenses = await self.get_total_expenses(user_id, start_date, end_date)
         return income - expenses
     
+    async def get_account_balance(
+        self,
+        user_id: int,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None
+    ) -> Decimal:
+        income = await self.transaction_repo.get_balance_affecting_total(
+            user_id, TransactionType.INCOME, start_date, end_date
+        )
+        expenses = await self.transaction_repo.get_balance_affecting_total(
+            user_id, TransactionType.EXPENSE, start_date, end_date
+        )
+        return income - expenses
+
+    async def get_credit_card_total(
+        self,
+        user_id: int,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None
+    ) -> Decimal:
+        return await self.transaction_repo.get_credit_card_total(
+            user_id, start_date, end_date
+        )
+
+    async def count_current_month_transactions(self, user_id: int) -> int:
+        from datetime import datetime
+        now = datetime.now()
+        return await self.transaction_repo.count_by_month(user_id, now.year, now.month)
+
     async def get_by_category(
         self, 
         user_id: int, 

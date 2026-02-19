@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     
     MERCADO_PAGO_ACCESS_TOKEN: str
     MERCADO_PAGO_PUBLIC_KEY: Optional[str] = None
+    MERCADO_PAGO_WEBHOOK_SECRET: Optional[str] = None
     
     FRONTEND_URL: str = "http://localhost:3000"
     BACKEND_URL: str = "http://localhost:8000"
@@ -29,7 +30,10 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "INFO"
     
-    WORKER_ENABLED: bool = True
+    ENABLE_WORKER: bool = True
+    
+    # Admin access (comma-separated emails)
+    ADMIN_EMAILS: str = ""
     
     class Config:
         env_file = ".env"

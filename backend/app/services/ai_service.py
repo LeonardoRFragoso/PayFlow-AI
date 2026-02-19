@@ -9,11 +9,15 @@ from app.core.logging import logger
 
 class AIService:
     def __init__(self):
-        self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        self.client = AsyncOpenAI(
+            api_key=settings.OPENAI_API_KEY,
+            timeout=30.0  # 30 segundos
+        )
         self.model = settings.OPENAI_MODEL
     
     async def classify_intent(self, message: str, context: str = "") -> Dict[str, Any]:
-        system_prompt = """Você é um assistente financeiro inteligente via WhatsApp.
+        today = datetime.now().strftime('%Y-%m-%d')
+        system_prompt = f"""Você é um assistente financeiro inteligente via WhatsApp.
 Sua função é classificar a intenção do usuário e extrair informações relevantes.
 
 INTENTS POSSÍVEIS:
@@ -29,7 +33,17 @@ Para despesas/receitas, extraia:
 - amount (valor numérico)
 - category (categoria como: alimentação, transporte, saúde, lazer, salário, freelance, etc)
 - description (descrição opcional)
-- date (data no formato YYYY-MM-DD, se não especificada use hoje)
+- payment_method (método de pagamento, valores possíveis: conta_corrente, cartao_credito, cartao_debito, pix, dinheiro, outros)
+  Exemplos de detecção: "no cartão", "no crédito", "cartão de crédito" = cartao_credito; "no débito" = cartao_debito; "pix" = pix; "dinheiro", "espécie" = dinheiro; "conta", "transferência", "Nubank", "banco" = conta_corrente; se não mencionado, use conta_corrente
+- cash_withdrawal (boolean, apenas quando payment_method=dinheiro): true se o usuário mencionar que sacou da conta, saque, caixa eletrônico, ATM. false se pagou com dinheiro que já tinha em mãos. Se não mencionado, use false.
+- date (data no formato YYYY-MM-DD, se não especificada use a data de HOJE que é {today})
+
+REGRAS DE IMPACTO NO SALDO DA CONTA CORRENTE:
+- conta_corrente: altera saldo diretamente
+- cartao_credito: NAO altera saldo da conta corrente (vai para fatura)
+- cartao_debito: altera saldo diretamente
+- pix: altera saldo diretamente
+- dinheiro: só altera saldo se for saque da conta (cash_withdrawal=true)
 
 Para lembretes, extraia:
 - title (título do lembrete)
@@ -46,15 +60,15 @@ IMPORTANTE:
 - Seja tolerante com erros de digitação
 
 Responda APENAS com JSON válido no formato:
-{
+{{
     "intent": "nome_do_intent",
     "confidence": 0.95,
-    "entities": {
+    "entities": {{
         "campo1": "valor1",
         "campo2": "valor2"
-    },
+    }},
     "response_suggestion": "Sugestão de resposta amigável para o usuário"
-}"""
+}}"""
 
         user_prompt = f"""Contexto da conversa:
 {context if context else "Nenhum contexto anterior"}

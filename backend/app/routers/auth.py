@@ -23,20 +23,24 @@ async def login(
     credentials: UserLogin,
     db: AsyncSession = Depends(get_db)
 ):
-    from app.utils.security_middleware import check_brute_force, clear_login_attempts
+    from app.utils.security_middleware import login_attempt_tracker
     
-    if not check_brute_force(credentials.email):
+    # Verificar se está bloqueado
+    if await login_attempt_tracker.is_blocked(credentials.email):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many login attempts. Please try again later."
+            detail="Too many login attempts. Please try again in 15 minutes."
         )
     
     try:
         auth_service = AuthService(db)
         token = await auth_service.login(credentials)
-        clear_login_attempts(credentials.email)
+        # Limpar tentativas após login bem-sucedido
+        await login_attempt_tracker.clear_attempts(credentials.email)
         return token
-    except HTTPException:
+    except HTTPException as e:
+        # Registrar tentativa falhada
+        await login_attempt_tracker.track_attempt(credentials.email)
         raise
 
 

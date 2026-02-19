@@ -54,6 +54,16 @@ async def get_payment_history(
     return payments
 
 
+@router.get("/usage")
+async def get_usage_stats(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    from app.services.plan_limit_service import PlanLimitService
+    plan_service = PlanLimitService(db)
+    return await plan_service.get_usage_stats(current_user.id)
+
+
 @router.post("/cancel-subscription")
 async def cancel_subscription(
     current_user: User = Depends(get_current_user),
@@ -80,7 +90,35 @@ async def mercado_pago_webhook(
         body = await request.json()
         headers = dict(request.headers)
         
-        logger.info(f"Received Mercado Pago webhook: {body}")
+        x_signature = headers.get("x-signature")
+        x_request_id = headers.get("x-request-id")
+        
+        if not x_signature or not x_request_id:
+            logger.warning("Webhook without signature headers - rejecting")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Missing signature headers"
+            )
+        
+        from app.integrations.mercado_pago import MercadoPagoService
+        mp_service = MercadoPagoService()
+        
+        raw_body = await request.body()
+        is_valid = mp_service.validate_webhook_signature(
+            raw_body.decode('utf-8'),
+            x_signature,
+            x_request_id
+        )
+        
+        if not is_valid:
+            logger.warning(f"Invalid webhook signature from Mercado Pago - rejecting")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid webhook signature"
+            )
+        
+        from app.utils.log_sanitizer import sanitize_webhook_data
+        logger.info(f"Received valid Mercado Pago webhook: {sanitize_webhook_data(body)}")
         
         billing_service = BillingService(db)
         success = await billing_service.process_payment_webhook(body)
@@ -90,6 +128,8 @@ async def mercado_pago_webhook(
         else:
             return {"status": "ignored"}
     
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error processing Mercado Pago webhook: {str(e)}", exc_info=True)
         raise HTTPException(

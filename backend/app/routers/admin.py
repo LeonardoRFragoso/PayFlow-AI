@@ -20,13 +20,15 @@ from app.models.subscription import Subscription
 from app.models.transaction import Transaction, TransactionType
 from app.models.payment_event import PaymentEvent
 from app.core.logging import logger
+from app.utils.dependencies import get_current_admin_user
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
 
 @router.get("/metrics", response_model=MetricsResponse)
 async def get_admin_metrics(
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
 ):
     try:
         total_users_result = await db.execute(select(func.count(User.id)))
@@ -134,7 +136,8 @@ async def get_admin_metrics(
 
 @router.get("/funnel", response_model=FunnelMetrics)
 async def get_funnel_metrics(
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
 ):
     try:
         analytics_service = AnalyticsService(db)
@@ -149,7 +152,8 @@ async def get_funnel_metrics(
 
 @router.get("/retention-cohort", response_model=CohortMetrics)
 async def get_retention_cohort(
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
 ):
     try:
         analytics_service = AnalyticsService(db)
@@ -164,7 +168,8 @@ async def get_retention_cohort(
 
 @router.get("/conversion", response_model=ConversionMetrics)
 async def get_conversion_metrics(
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
 ):
     try:
         analytics_service = AnalyticsService(db)
@@ -180,7 +185,8 @@ async def get_conversion_metrics(
 @router.get("/retention", response_model=RetentionMetrics)
 async def get_retention_metrics(
     days: int = Query(30, ge=1, le=365),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
 ):
     try:
         analytics_service = AnalyticsService(db)
@@ -195,7 +201,8 @@ async def get_retention_metrics(
 
 @router.get("/churn", response_model=ChurnMetrics)
 async def get_churn_metrics(
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
 ):
     try:
         analytics_service = AnalyticsService(db)
@@ -210,7 +217,8 @@ async def get_churn_metrics(
 
 @router.get("/ltv", response_model=LTVMetrics)
 async def get_ltv_metrics(
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
 ):
     try:
         analytics_service = AnalyticsService(db)
@@ -226,7 +234,8 @@ async def get_ltv_metrics(
 @router.get("/dashboard", response_model=DashboardMetrics)
 async def get_admin_dashboard(
     cac_estimate: float = Query(50.0, description="Estimated Customer Acquisition Cost"),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin_user)
 ):
     try:
         analytics_service = AnalyticsService(db)

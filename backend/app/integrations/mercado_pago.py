@@ -1,4 +1,6 @@
 import mercadopago
+import hmac
+import hashlib
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
 from app.core.config import settings
@@ -9,6 +11,11 @@ class MercadoPagoService:
     def __init__(self):
         self.sdk = mercadopago.SDK(settings.MERCADO_PAGO_ACCESS_TOKEN)
     
+    def _get_public_url(self) -> str:
+        if "localhost" in settings.FRONTEND_URL:
+            return settings.BACKEND_URL
+        return settings.FRONTEND_URL
+
     def create_subscription(
         self, 
         user_email: str, 
@@ -17,6 +24,7 @@ class MercadoPagoService:
         user_id: int
     ) -> Dict[str, Any]:
         try:
+            public_url = self._get_public_url()
             subscription_data = {
                 "reason": plan_name,
                 "auto_recurring": {
@@ -25,7 +33,7 @@ class MercadoPagoService:
                     "transaction_amount": plan_price,
                     "currency_id": "BRL"
                 },
-                "back_url": f"{settings.FRONTEND_URL}/dashboard",
+                "back_url": f"{public_url}/dashboard",
                 "payer_email": user_email,
                 "external_reference": str(user_id),
                 "status": "pending"
@@ -58,6 +66,7 @@ class MercadoPagoService:
         external_reference: str
     ) -> Dict[str, Any]:
         try:
+            public_url = self._get_public_url()
             preference_data = {
                 "items": [
                     {
@@ -71,13 +80,13 @@ class MercadoPagoService:
                     "email": payer_email
                 },
                 "back_urls": {
-                    "success": f"{settings.FRONTEND_URL}/payment/success",
-                    "failure": f"{settings.FRONTEND_URL}/payment/failure",
-                    "pending": f"{settings.FRONTEND_URL}/payment/pending"
+                    "success": f"{public_url}/payment/success",
+                    "failure": f"{public_url}/payment/failure",
+                    "pending": f"{public_url}/payment/pending"
                 },
                 "auto_return": "approved",
                 "external_reference": external_reference,
-                "notification_url": f"{settings.BACKEND_URL}/webhook/mercado-pago",
+                "notification_url": f"{settings.BACKEND_URL}/billing/webhook/mercado-pago",
                 "statement_descriptor": "ASSISTENTE FINANCEIRO"
             }
             
@@ -126,16 +135,43 @@ class MercadoPagoService:
             logger.error(f"Error cancelling subscription {subscription_id}: {str(e)}")
             return False
     
-    def validate_webhook_signature(self, data: Dict, headers: Dict) -> bool:
+    def validate_webhook_signature(self, query_params: Dict, headers: Dict) -> bool:
         try:
+            secret = settings.MERCADO_PAGO_WEBHOOK_SECRET
+            if not secret:
+                logger.warning("MERCADO_PAGO_WEBHOOK_SECRET not configured, skipping validation")
+                return True
+
             x_signature = headers.get("x-signature")
             x_request_id = headers.get("x-request-id")
-            
+
             if not x_signature or not x_request_id:
+                logger.warning("Missing x-signature or x-request-id headers")
                 return False
-            
-            return True
-            
+
+            parts = {}
+            for part in x_signature.split(","):
+                key, value = part.strip().split("=", 1)
+                parts[key] = value
+
+            ts = parts.get("ts")
+            v1 = parts.get("v1")
+
+            if not ts or not v1:
+                return False
+
+            data_id = query_params.get("data.id", query_params.get("id", ""))
+
+            manifest = f"id:{data_id};request-id:{x_request_id};ts:{ts};"
+
+            computed = hmac.new(
+                secret.encode(),
+                manifest.encode(),
+                hashlib.sha256
+            ).hexdigest()
+
+            return hmac.compare_digest(computed, v1)
+
         except Exception as e:
             logger.error(f"Error validating webhook signature: {str(e)}")
             return False

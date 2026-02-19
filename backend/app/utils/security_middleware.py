@@ -8,36 +8,75 @@ from typing import Dict
 import time
 from collections import defaultdict
 from app.core.logging import logger
+from datetime import datetime, timedelta
+from typing import Optional
+from app.core.logging import logger
+from app.core.redis import get_redis
 
 limiter = Limiter(key_func=get_remote_address)
 
 class LoginAttemptTracker:
-    def __init__(self, max_attempts: int = 5, window_seconds: int = 300):
-        self.max_attempts = max_attempts
-        self.window_seconds = window_seconds
-        self.attempts: Dict[str, list] = defaultdict(list)
+    def __init__(self):
+        self.redis = None
+        self.ttl_seconds = 900  # 15 minutos
     
-    def record_attempt(self, identifier: str) -> bool:
-        current_time = time.time()
-        cutoff_time = current_time - self.window_seconds
-        
-        self.attempts[identifier] = [
-            t for t in self.attempts[identifier] if t > cutoff_time
-        ]
-        
-        if len(self.attempts[identifier]) >= self.max_attempts:
-            logger.warning(f"Brute force attempt detected for {identifier}")
+    async def _get_redis(self):
+        """Obtém conexão Redis lazy"""
+        if self.redis is None:
+            self.redis = await get_redis()
+        return self.redis
+    
+    async def track_attempt(self, identifier: str) -> int:
+        """Registra tentativa de login e retorna total de tentativas"""
+        try:
+            redis = await self._get_redis()
+            key = f"login_attempts:{identifier}"
+            
+            # Incrementa contador
+            attempts = await redis.incr(key)
+            
+            # Define TTL apenas na primeira tentativa
+            if attempts == 1:
+                await redis.expire(key, self.ttl_seconds)
+            
+            logger.info(f"Login attempt {attempts} for {identifier}")
+            return attempts
+            
+        except Exception as e:
+            logger.error(f"Error tracking login attempt: {e}")
+            # Fallback: permitir login se Redis falhar
+            return 0
+    
+    async def is_blocked(self, identifier: str) -> bool:
+        """Verifica se identificador está bloqueado"""
+        try:
+            redis = await self._get_redis()
+            key = f"login_attempts:{identifier}"
+            attempts = await redis.get(key)
+            
+            if attempts is None:
+                return False
+            
+            return int(attempts) >= 5
+            
+        except Exception as e:
+            logger.error(f"Error checking if blocked: {e}")
+            # Fallback: permitir login se Redis falhar
             return False
-        
-        self.attempts[identifier].append(current_time)
-        return True
     
-    def clear_attempts(self, identifier: str):
-        if identifier in self.attempts:
-            del self.attempts[identifier]
+    async def clear_attempts(self, identifier: str):
+        """Limpa tentativas após login bem-sucedido"""
+        try:
+            redis = await self._get_redis()
+            key = f"login_attempts:{identifier}"
+            await redis.delete(key)
+            logger.info(f"Cleared login attempts for {identifier}")
+            
+        except Exception as e:
+            logger.error(f"Error clearing attempts: {e}")
 
 
-login_tracker = LoginAttemptTracker()
+login_attempt_tracker = LoginAttemptTracker()
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -45,10 +84,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
         response.headers["X-XSS-Protection"] = "1; mode=block"
-        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-        response.headers["Content-Security-Policy"] = "default-src 'self'"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
         

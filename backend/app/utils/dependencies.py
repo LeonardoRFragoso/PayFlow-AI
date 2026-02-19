@@ -60,3 +60,32 @@ async def get_current_active_user(
         )
     
     return current_user
+
+
+async def get_current_admin_user(
+    current_user: User = Depends(get_current_user)
+) -> User:
+    """
+    Validates that the current user has admin privileges.
+    For now, checks if user email is in admin list from settings.
+    In production, implement proper role-based access control.
+    """
+    from app.core.config import settings
+    
+    # Get admin emails from environment variable (comma-separated)
+    admin_emails = getattr(settings, 'ADMIN_EMAILS', '').split(',')
+    admin_emails = [email.strip() for email in admin_emails if email.strip()]
+    
+    if not admin_emails:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Admin access not configured"
+        )
+    
+    if current_user.email not in admin_emails:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    
+    return current_user
