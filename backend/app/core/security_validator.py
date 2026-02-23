@@ -25,16 +25,16 @@ def validate_secret_key():
     
     if secret_key.lower() in weak_keys:
         logger.critical("🚨 CRITICAL SECURITY ERROR: SECRET_KEY is using a default/weak value!")
-        logger.critical("Generate a strong key with: openssl rand -hex 32")
-        logger.critical("Or in Python: import secrets; secrets.token_hex(32)")
+        logger.critical("Generate a strong key with: python scripts/generate_secret_key.py")
+        logger.critical("Or use: python -c \"import secrets; print(secrets.token_urlsafe(64))\"")
         sys.exit(1)
     
     # Check minimum length (256 bits = 64 hex chars, but we accept 32+ for flexibility)
     if len(secret_key) < 32:
         logger.critical(f"🚨 CRITICAL SECURITY ERROR: SECRET_KEY is too short ({len(secret_key)} chars)")
         logger.critical("Minimum required: 32 characters")
-        logger.critical("Recommended: 64+ characters (256 bits)")
-        logger.critical("Generate with: openssl rand -hex 32")
+        logger.critical("Recommended: 64+ characters for maximum security")
+        logger.critical("Generate with: python scripts/generate_secret_key.py")
         sys.exit(1)
     
     # Warn if not using recommended length

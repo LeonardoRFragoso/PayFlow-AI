@@ -2,7 +2,22 @@
 
 Sistema completo de gestão financeira pessoal via WhatsApp com dashboard web, utilizando inteligência artificial para processamento de linguagem natural.
 
-## 🚀 Tecnologias
+## � Como Testar o WhatsApp
+
+**Número para iniciar conversa**: `+1 415 523 8886` (Twilio Sandbox)
+
+**Passos para começar:**
+1. Adicione o número `+1 415 523 8886` nos seus contatos
+2. Envie uma mensagem no WhatsApp com o código: `join <seu-codigo-sandbox>`
+3. Aguarde a confirmação do Twilio
+4. Comece a usar! Exemplos:
+   - "Gastei R$ 50 com almoço"
+   - "Qual meu saldo?"
+   - "Mostre minhas transações"
+
+> **Nota**: Este é o número do Twilio WhatsApp Sandbox para desenvolvimento. Em produção, você terá seu próprio número aprovado.
+
+## � Tecnologias
 
 ### Backend
 - **Python 3.11+** com FastAPI
@@ -80,10 +95,20 @@ frontend/
 
 ### 2. Configurar Variáveis de Ambiente
 
-Copie o arquivo `.env.example` para `.env` e configure:
+Copie o arquivo `.env.example` para `.env`:
 
 ```bash
 cp .env.example .env
+```
+
+**Gerar SECRET_KEY segura** (IMPORTANTE):
+
+```bash
+# Use o script fornecido
+python scripts/generate_secret_key.py
+
+# Ou gere manualmente
+python -c "import secrets; print(secrets.token_urlsafe(64))"
 ```
 
 Edite o arquivo `.env` com suas credenciais:
@@ -93,8 +118,8 @@ Edite o arquivo `.env` com suas credenciais:
 DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/financial_assistant
 REDIS_URL=redis://redis:6379/0
 
-# Security
-SECRET_KEY=seu-secret-key-super-seguro-aqui
+# Security - IMPORTANTE: Use uma chave de 64+ caracteres
+SECRET_KEY=sua-secret-key-gerada-com-64-ou-mais-caracteres
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 
@@ -107,6 +132,9 @@ TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
 OPENAI_API_KEY=sua_openai_api_key
 OPENAI_MODEL=gpt-4o
 
+# Ngrok (para desenvolvimento local)
+NGROK_AUTHTOKEN=seu_ngrok_authtoken
+
 # Stripe (opcional)
 STRIPE_SECRET_KEY=sua_stripe_secret_key
 STRIPE_WEBHOOK_SECRET=seu_stripe_webhook_secret
@@ -114,6 +142,12 @@ STRIPE_WEBHOOK_SECRET=seu_stripe_webhook_secret
 # Environment
 ENVIRONMENT=development
 LOG_LEVEL=INFO
+```
+
+**Validar configuração** (recomendado):
+
+```bash
+python scripts/validate_environment.py
 ```
 
 ### 3. Iniciar o Projeto
@@ -131,9 +165,27 @@ docker-compose down
 
 Os serviços estarão disponíveis em:
 - **Backend API**: http://localhost:8000
+- **API Docs (Swagger)**: http://localhost:8000/docs
 - **Frontend**: http://localhost:3000
+- **Ngrok Dashboard**: http://localhost:4040
 - **PostgreSQL**: localhost:5432
 - **Redis**: localhost:6379
+
+**Verificar saúde dos serviços:**
+
+```bash
+# Backend
+curl http://localhost:8000/health
+
+# Ver URL pública do Ngrok
+curl http://localhost:4040/api/tunnels | jq '.tunnels[0].public_url'
+
+# PostgreSQL
+docker-compose exec postgres pg_isready -U postgres
+
+# Redis
+docker-compose exec redis redis-cli ping
+```
 
 ### 4. Documentação da API
 
@@ -143,19 +195,31 @@ Acesse a documentação interativa:
 
 ## 📱 Configurar Webhook do Twilio
 
-1. Acesse o [Console Twilio](https://console.twilio.com/)
-2. Vá em **Messaging** > **Settings** > **WhatsApp Sandbox**
-3. Configure o webhook para: `https://seu-dominio.com/webhook/whatsapp`
-4. Método: **POST**
+**Para desenvolvimento local**, o projeto já inclui Ngrok configurado no Docker Compose!
+
+1. Após iniciar o projeto, obtenha a URL pública do Ngrok:
+   ```bash
+   # Ver no dashboard
+   open http://localhost:4040
+   
+   # Ou via API
+   curl http://localhost:4040/api/tunnels | jq '.tunnels[0].public_url'
+   ```
+
+2. Acesse o [Console Twilio](https://console.twilio.com/)
+
+3. Vá em **Messaging** > **Settings** > **WhatsApp Sandbox**
+
+4. Configure o webhook:
+   - **URL**: `https://sua-url-ngrok.ngrok-free.app/webhook/whatsapp`
+   - **Método**: POST
+   - **Status Callback**: (opcional) mesma URL com `/status`
+
 5. Salve as configurações
 
-**Importante**: Para desenvolvimento local, use [ngrok](https://ngrok.com/):
+6. Teste enviando uma mensagem para o número do Twilio Sandbox
 
-```bash
-ngrok http 8000
-```
-
-Use a URL gerada pelo ngrok no webhook do Twilio.
+> **Nota**: A URL do Ngrok muda a cada reinicialização. Configure o `NGROK_AUTHTOKEN` no `.env` para URLs persistentes.
 
 ## 💬 Exemplos de Uso via WhatsApp
 
@@ -300,7 +364,35 @@ O sistema foi projetado para escalar:
 - **Stateless** (pode rodar múltiplas instâncias)
 - **Separação de camadas** (fácil microservices)
 
-## 🛠️ Desenvolvimento
+## � Scripts Utilitários
+
+O projeto inclui scripts para facilitar o desenvolvimento:
+
+### Gerar SECRET_KEY Segura
+```bash
+python scripts/generate_secret_key.py
+```
+
+### Validar Configuração do Ambiente
+```bash
+python scripts/validate_environment.py
+```
+
+## ✅ Correções Recentes Aplicadas
+
+### Migration do PaymentMethod (Fev 2026)
+- ✅ Corrigido erro: `invalid input value for enum paymentmethod`
+- ✅ Migration agora é idempotente (pode ser executada múltiplas vezes)
+- ✅ Usa blocos `DO $$ BEGIN ... EXCEPTION` do PostgreSQL
+
+### Segurança
+- ✅ SECRET_KEY agora requer 64+ caracteres
+- ✅ Validação aprimorada na inicialização
+- ✅ Scripts utilitários para geração de chaves seguras
+
+**Documentação completa das correções**: Ver `MIGRATION_FIX.md` e `QUICK_START.md`
+
+## �🛠️ Desenvolvimento
 
 ### Adicionar nova funcionalidade
 
@@ -316,6 +408,42 @@ O sistema foi projetado para escalar:
 ```bash
 docker-compose exec backend alembic revision --autogenerate -m "descrição"
 docker-compose exec backend alembic upgrade head
+```
+
+### Troubleshooting
+
+**Backend não inicia:**
+```bash
+# Ver logs completos
+docker-compose logs backend --tail=100
+
+# Verificar conectividade com PostgreSQL
+docker-compose exec postgres pg_isready
+
+# Verificar variáveis de ambiente
+docker-compose exec backend env | grep -E "(DATABASE|SECRET|REDIS)"
+```
+
+**Erro na Migration:**
+```bash
+# Ver status atual
+docker-compose exec backend alembic current
+
+# Reverter e reaplicar
+docker-compose exec backend alembic downgrade -1
+docker-compose exec backend alembic upgrade head
+```
+
+**Ngrok não conecta:**
+```bash
+# Verificar se backend está rodando
+curl http://localhost:8000/health
+
+# Ver logs do Ngrok
+docker-compose logs ngrok
+
+# Verificar token no .env
+grep NGROK_AUTHTOKEN .env
 ```
 
 ## 📝 Licença

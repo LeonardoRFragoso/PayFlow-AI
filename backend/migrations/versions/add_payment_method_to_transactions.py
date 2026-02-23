@@ -14,8 +14,23 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute("CREATE TYPE paymentmethod AS ENUM ('conta_corrente', 'cartao_credito', 'cartao_debito', 'pix', 'dinheiro', 'outros')")
-    op.execute("ALTER TABLE transactions ADD COLUMN payment_method paymentmethod NOT NULL DEFAULT 'conta_corrente'::paymentmethod")
+    # Criar o enum apenas se não existir
+    op.execute("""
+        DO $$ BEGIN
+            CREATE TYPE paymentmethod AS ENUM ('conta_corrente', 'cartao_credito', 'cartao_debito', 'pix', 'dinheiro', 'outros');
+        EXCEPTION
+            WHEN duplicate_object THEN null;
+        END $$;
+    """)
+    
+    # Adicionar a coluna apenas se não existir
+    op.execute("""
+        DO $$ BEGIN
+            ALTER TABLE transactions ADD COLUMN payment_method paymentmethod NOT NULL DEFAULT 'conta_corrente'::paymentmethod;
+        EXCEPTION
+            WHEN duplicate_column THEN null;
+        END $$;
+    """)
 
 
 def downgrade() -> None:
