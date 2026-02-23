@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from app.core.database import engine, Base
 from app.core.redis import init_redis, close_redis
 from app.core.logging import logger
-from app.routers import auth, transactions, reminders, reports, webhook, billing, admin, test, health
+from app.routers import auth, transactions, reminders, reports, webhook, billing, admin, admin_crud, test, health
 from app.utils.security_middleware import SecurityHeadersMiddleware, IPRateLimitMiddleware
 from app.core.config import settings
 from app.core.security_validator import validate_production_config
@@ -64,6 +64,7 @@ app.include_router(reports.router)
 app.include_router(webhook.router)
 app.include_router(billing.router)
 app.include_router(admin.router)
+app.include_router(admin_crud.router)
 app.include_router(test.router)
 app.include_router(health.router)
 
